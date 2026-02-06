@@ -16,10 +16,8 @@ enum GeminiConfig {
 
   static let systemInstruction = "You are an AI assistant helping someone wearing smart glasses. You can see what they see through their glasses camera. Describe what you see when asked, and answer questions conversationally. Keep responses concise and natural."
 
-  private static let defaultApiKey = "REDACTED_API_KEY"
-
   static var apiKey: String {
-    get { UserDefaults.standard.string(forKey: "gemini_api_key") ?? defaultApiKey }
+    get { UserDefaults.standard.string(forKey: "gemini_api_key") ?? "" }
     set { UserDefaults.standard.set(newValue, forKey: "gemini_api_key") }
   }
 
