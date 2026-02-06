@@ -28,6 +28,9 @@ class GeminiSessionViewModel: ObservableObject {
     audioManager.onAudioCaptured = { [weak self] data in
       guard let self else { return }
       Task { @MainActor in
+        // iPhone mode: mute mic while model speaks to prevent echo feedback
+        // (loudspeaker + co-located mic overwhelms iOS echo cancellation)
+        if self.streamingMode == .iPhone && self.geminiService.isModelSpeaking { return }
         self.geminiService.sendAudio(data: data)
       }
     }
