@@ -1,5 +1,28 @@
 import Foundation
 
+// Accepts self-signed cert for OpenClaw host only (Caddy on IP has no Let's Encrypt).
+private final class OpenClawSessionDelegate: NSObject, URLSessionDelegate {
+  let allowedHost: String
+
+  init(allowedHost: String) {
+    self.allowedHost = allowedHost
+  }
+
+  func urlSession(
+    _ session: URLSession,
+    didReceive challenge: URLAuthenticationChallenge,
+    completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+  ) {
+    guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+          challenge.protectionSpace.host == allowedHost,
+          let trust = challenge.protectionSpace.serverTrust else {
+      completionHandler(.performDefaultHandling, nil)
+      return
+    }
+    completionHandler(.useCredential, URLCredential(trust: trust))
+  }
+}
+
 enum OpenClawConnectionState: Equatable {
   case notConfigured
   case checking
@@ -19,13 +42,16 @@ class OpenClawBridge: ObservableObject {
   private let maxHistoryTurns = 10
 
   init() {
+    let allowedHost = URL(string: "\(GeminiConfig.openClawHost):\(GeminiConfig.openClawPort)/health")?.host ?? ""
+    let delegate = OpenClawSessionDelegate(allowedHost: allowedHost)
+
     let config = URLSessionConfiguration.default
     config.timeoutIntervalForRequest = 120
-    self.session = URLSession(configuration: config)
+    self.session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
 
     let pingConfig = URLSessionConfiguration.default
     pingConfig.timeoutIntervalForRequest = 5
-    self.pingSession = URLSession(configuration: pingConfig)
+    self.pingSession = URLSession(configuration: pingConfig, delegate: delegate, delegateQueue: nil)
 
     self.sessionKey = OpenClawBridge.newSessionKey()
   }
@@ -36,16 +62,15 @@ class OpenClawBridge: ObservableObject {
       return
     }
     connectionState = .checking
-    guard let url = URL(string: "\(GeminiConfig.openClawHost):\(GeminiConfig.openClawPort)/v1/chat/completions") else {
+    guard let url = URL(string: "\(GeminiConfig.openClawHost):\(GeminiConfig.openClawPort)/health") else {
       connectionState = .unreachable("Invalid URL")
       return
     }
     var request = URLRequest(url: url)
     request.httpMethod = "GET"
-    request.setValue("Bearer \(GeminiConfig.openClawGatewayToken)", forHTTPHeaderField: "Authorization")
     do {
       let (_, response) = try await pingSession.data(for: request)
-      if let http = response as? HTTPURLResponse, (200...499).contains(http.statusCode) {
+      if let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) {
         connectionState = .connected
         NSLog("[OpenClaw] Gateway reachable (HTTP %d)", http.statusCode)
       } else {

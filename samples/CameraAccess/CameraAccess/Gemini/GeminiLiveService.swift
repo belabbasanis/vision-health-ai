@@ -63,11 +63,12 @@ class GeminiLiveService: ObservableObject {
       self.delegate.onClose = { [weak self] code, reason in
         guard let self else { return }
         let reasonStr = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "no reason"
+        let fullMsg = "Connection closed (code \(code.rawValue): \(reasonStr))"
         Task { @MainActor in
           self.resolveConnect(success: false)
-          self.connectionState = .disconnected
+          self.connectionState = .error(fullMsg)
           self.isModelSpeaking = false
-          self.onDisconnected?("Connection closed (code \(code.rawValue): \(reasonStr))")
+          self.onDisconnected?(fullMsg)
         }
       }
 
@@ -127,7 +128,7 @@ class GeminiLiveService: ObservableObject {
           ]
         ]
       ]
-      self?.sendJSON(json)
+      Task { @MainActor in self?.sendJSON(json) }
     }
   }
 
@@ -144,13 +145,13 @@ class GeminiLiveService: ObservableObject {
           ]
         ]
       ]
-      self?.sendJSON(json)
+      Task { @MainActor in self?.sendJSON(json) }
     }
   }
 
   func sendToolResponse(_ response: [String: Any]) {
     sendQueue.async { [weak self] in
-      self?.sendJSON(response)
+      Task { @MainActor in self?.sendJSON(response) }
     }
   }
 

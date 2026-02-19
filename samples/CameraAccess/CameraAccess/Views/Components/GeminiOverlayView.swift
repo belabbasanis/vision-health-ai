@@ -2,16 +2,32 @@ import SwiftUI
 
 struct GeminiStatusBar: View {
   @ObservedObject var geminiVM: GeminiSessionViewModel
+  @State private var showOpenClawError = false
 
   var body: some View {
     HStack(spacing: 8) {
       // Gemini connection pill
       StatusPill(color: geminiStatusColor, text: geminiStatusText)
 
-      // OpenClaw connection pill
-      StatusPill(color: openClawStatusColor, text: openClawStatusText)
+      // OpenClaw connection pill - tappable when unreachable to show error
+      Button {
+        if case .unreachable = geminiVM.openClawConnectionState {
+          showOpenClawError = true
+        }
+      } label: {
+        StatusPill(color: openClawStatusColor, text: openClawStatusText)
+      }
+      .buttonStyle(.plain)
+    }
+    .alert("OpenClaw Connection", isPresented: $showOpenClawError) {
+      Button("OK", role: .cancel) {}
+    } message: {
+      if case .unreachable(let reason) = geminiVM.openClawConnectionState {
+        Text(reason)
+      }
     }
   }
+
 
   private var geminiStatusColor: Color {
     switch geminiVM.connectionState {
@@ -44,7 +60,7 @@ struct GeminiStatusBar: View {
     switch geminiVM.openClawConnectionState {
     case .connected: return "OpenClaw"
     case .checking: return "OpenClaw..."
-    case .unreachable: return "OpenClaw Off"
+    case .unreachable: return "OpenClaw Error"  // Tap pill to see full reason
     case .notConfigured: return "No OpenClaw"
     }
   }
